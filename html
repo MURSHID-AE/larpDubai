@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Ghost City Dubai - Multiplayer Life Sim</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="loading-spinner"></div>
+        <p>Connecting to Ghost City...</p>
+    </div>
+    
+    <div id="hud">
+        <div class="top-bar">
+            <div class="money-display">💰 $<span id="money">0</span></div>
+            <div class="player-info">
+                <span id="player-name">Loading...</span>
+                <span id="job-name">No Job</span>
+            </div>
+            <div class="stats">
+                <span>⚡ <span id="energy">100</span>%</span>
+                <span>😊 <span id="happiness">80</span>%</span>
+            </div>
+        </div>
+        
+        <div class="interaction-panel" id="interaction-panel">
+            <div class="prompt-text" id="prompt-text">Look at a building to interact</div>
+            <div class="action-buttons" id="action-buttons"></div>
+        </div>
+        
+        <div class="menu-panel" id="menu-panel">
+            <button class="menu-tab" data-tab="properties">🏢 Properties</button>
+            <button class="menu-tab" data-tab="businesses">🏪 Businesses</button>
+            <button class="menu-tab" data-tab="jobs">💼 Jobs</button>
+            <button class="menu-tab" data-tab="players">👥 Players</button>
+        </div>
+        
+        <div class="info-window" id="info-window">
+            <div class="info-header">
+                <span id="info-title">Info</span>
+                <button id="close-info">✕</button>
+            </div>
+            <div class="info-content" id="info-content"></div>
+        </div>
+    </div>
+    
+    <div class="notification" id="notification"></div>
+    
+    <div class="controls-hint">
+        <span>WASD to move</span>
+        <span>Mouse to look</span>
+        <span>E to interact</span>
+    </div>
+    
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+            }
+        }
+    </script>
+    <script type="module" src="game.js"></script>
+</body>
+</html>
