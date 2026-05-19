@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Ghost City - Multiplayer Life Sim</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body { font-family: 'Segoe UI', system-ui, monospace; overflow: hidden; background: #020408; }
+        
+        /* Loading Screen */
+        #loading {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #0a0e1a, #060814);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 2000; color: white; gap: 20px;
+        }
+        .spinner { width: 50px; height: 50px; border: 3px solid #3a4a6e; border-top-color: #8aaeff; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* HUD */
+        #hud {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100; pointer-events: none;
+        }
+        .top-bar {
+            background: rgba(8, 12, 24, 0.9); backdrop-filter: blur(12px);
+            padding: 12px 24px; display: flex; justify-content: space-between;
+            border-bottom: 1px solid rgba(100, 140, 220, 0.3); pointer-events: auto;
+        }
+        .money { background: linear-gradient(135deg, #2a3f66, #1a2a4a); padding: 8px 20px; border-radius: 40px; font-weight: bold; font-size: 20px; color: #ffd966; }
+        .player-info { display: flex; gap: 20px; background: rgba(0,0,0,0.5); padding: 8px 20px; border-radius: 40px; }
+        .stats { display: flex; gap: 15px; background: rgba(0,0,0,0.5); padding: 8px 20px; border-radius: 40px; }
+        
+        /* Interaction Panel */
+        .interaction {
+            position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); border-radius: 20px;
+            padding: 16px 24px; text-align: center; pointer-events: auto; border: 1px solid #8aaeff;
+            min-width: 320px; z-index: 150;
+        }
+        .prompt { color: #aaffdd; font-size: 14px; margin-bottom: 12px; }
+        .action-buttons { display: flex; gap: 12px; justify-content: center; }
+        .action-buttons button, .buy-btn, .work-btn {
+            background: linear-gradient(135deg, #3d5a8c, #2a3f66); border: none;
+            padding: 10px 20px; border-radius: 12px; color: white; cursor: pointer;
+            font-weight: 600; transition: 0.2s;
+        }
+        .action-buttons button:hover, .buy-btn:hover, .work-btn:hover { transform: translateY(-2px); background: #4f6ea0; }
+        
+        /* Menu Panel */
+        .menu-panel {
+            position: fixed; bottom: 20px; left: 20px; right: 20px;
+            display: flex; gap: 12px; justify-content: center; pointer-events: auto; z-index: 150;
+        }
+        .menu-panel button {
+            background: rgba(8, 12, 24, 0.9); backdrop-filter: blur(8px);
+            border: 1px solid #5f7ab5; padding: 12px 24px; border-radius: 40px;
+            color: white; cursor: pointer; font-weight: 600; transition: 0.2s;
+        }
+        .menu-panel button:hover { background: #3d5a8c; border-color: #8aaeff; }
+        
+        /* Modal Window */
+        .modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 450px; max-width: 90vw; max-height: 70vh;
+            background: rgba(10, 15, 30, 0.98); backdrop-filter: blur(20px);
+            border-radius: 20px; border: 1px solid #8aaeff; display: none;
+            flex-direction: column; overflow: hidden; z-index: 300; pointer-events: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #3a4a6e; }
+        .modal-header button { background: none; border: none; color: white; font-size: 20px; cursor: pointer; }
+        .modal-content { padding: 20px; overflow-y: auto; max-height: 60vh; }
+        
+        .item-card { background: rgba(25, 35, 55, 0.6); padding: 12px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .item-name { font-weight: bold; }
+        .item-price { color: #ffd966; font-size: 12px; }
+        .owned-badge { background: #2a9d6e; padding: 4px 8px; border-radius: 12px; font-size: 10px; }
+        
+        /* Chat */
+        .chat-container {
+            position: fixed; bottom: 20px; left: 20px; width: 300px;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+            border-radius: 12px; pointer-events: auto; z-index: 150;
+        }
+        .chat-messages { height: 200px; overflow-y: auto; padding: 10px; font-size: 12px; }
+        .chat-input { display: flex; padding: 8px; border-top: 1px solid #3a4a6e; }
+        .chat-input input { flex: 1; background: #1a2a4a; border: none; padding: 8px; color: white; border-radius: 8px; outline: none; }
+        .chat-input button { background: #3d5a8c; border: none; padding: 8px 12px; margin-left: 8px; border-radius: 8px; color: white; cursor: pointer; }
+        
+        .notification {
+            position: fixed; top: 100px; right: 20px; background: rgba(0,0,0,0.9);
+            padding: 12px 20px; border-radius: 12px; border-left: 4px solid #88ffaa;
+            display: none; z-index: 300; pointer-events: none;
+        }
+        .crosshair {
+            position: fixed; top: 50%; left: 50%; width: 4px; height: 4px;
+            background: white; border-radius: 50%; transform: translate(-50%, -50%);
+            z-index: 200; pointer-events: none;
+        }
+        .controls-hint {
+            position: fixed; bottom: 20px; right: 20px;
+            background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px;
+            font-size: 10px; display: flex; gap: 15px; pointer-events: none; font-family: monospace; z-index: 150;
+        }
+        @media (max-width: 768px) {
+            .top-bar { flex-direction: column; gap: 10px; }
+            .menu-panel { bottom: 100px; }
+            .interaction { bottom: 200px; min-width: 280px; }
+            .chat-container { width: 260px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading"><div class="spinner"></div><div>Connecting to Ghost City...</div></div>
+    <div class="crosshair"></div>
+    
+    <div id="hud">
+        <div class="top-bar">
+            <div class="money">💰 $<span id="money">0</span></div>
+            <div class="player-info"><span id="playerName">-</span> | <span id="jobName">No Job</span></div>
+            <div class="stats"><span>⚡ <span id="energy">100</span>%</span><span>😊 <span id="happiness">80</span>%</span></div>
+        </div>
+    </div>
+    
+    <div class="interaction" id="interaction">
+        <div class="prompt" id="prompt">🔍 Look at a building to interact</div>
+        <div class="action-buttons" id="actionBtns"></div>
+    </div>
+    
+    <div class="menu-panel">
+        <button onclick="showProperties()">🏢 Properties</button>
+        <button onclick="showBusinesses()">🏪 Businesses</button>
+        <button onclick="showJobs()">💼 Jobs</button>
+        <button onclick="showPlayers()">👥 Players</button>
+    </div>
+    
+    <div class="chat-container">
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input">
+            <input type="text" id="chatInput" placeholder="Chat..." maxlength="100" onkeypress="if(event.key==='Enter') sendChat()">
+            <button onclick="sendChat()">Send</button>
+        </div>
+    </div>
+    
+    <div class="modal" id="modal"><div class="modal-header"><span id="modalTitle">Info</span><button onclick="closeModal()">✕</button></div><div class="modal-content" id="modalContent"></div></div>
+    <div class="notification" id="notification"></div>
+    <div class="controls-hint"><span>WASD to move</span><span>Mouse to look</span><span>E to interact/work</span></div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js" } }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        
+        const socket = io();
+        let scene, camera, renderer;
+        let players = new Map();
+        let buildings = [];
+        let currentPlayer = null;
+        let zones = null;
+        
+        let keys = { w: false, s: false, a: false, d: false };
+        let pitch = 0, yaw = -Math.PI / 3;
+        let pointerLock = false;
+        let currentLookTarget = null;
+        
+        // UI Elements
+        const loadingScreen = document.getElementById('loading');
+        
+        function showNotification(msg, isError = false) {
+            const n = document.getElementById('notification');
+            n.textContent = msg;
+            n.style.display = 'block';
+            n.style.borderLeftColor = isError ? '#ff8888' : '#88ffaa';
+            setTimeout(() => n.style.display = 'none', 3000);
+        }
+        
+        function sendChat() {
+            const input = document.getElementById('chatInput');
+            if (input.value.trim()) {
+                socket.emit('chat-message', input.value);
+                input.value = '';
+            }
+        }
+        
+        function addChatMessage(username, message, time) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.innerHTML = `<span style="color:#8aaeff">[${time || new Date().toLocaleTimeString()}]</span> <b>${username}:</b> ${message}`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            if (container.children.length > 50) container.removeChild(container.firstChild);
+        }
+        
+        // Three.js Setup
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.FogExp2(0x87CEEB, 0.008);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
+            camera.rotation.order = 'YXZ';
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+            
+            // Lighting
+            const ambient = new THREE.AmbientLight(0x404060);
+            scene.add(ambient);
+            const sun = new THREE.DirectionalLight(0xfff5e6, 1.2);
+            sun.position.set(20, 30, 10);
+            sun.castShadow = true;
+            sun.shadow.mapSize.width = 1024;
+            sun.shadow.mapSize.height = 1024;
+            scene.add(sun);
+            const fill = new THREE.PointLight(0x4466cc, 0.4);
+            fill.position.set(0, 10, 0);
+            scene.add(fill);
+            
+            // Ground
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), new THREE.MeshStandardMaterial({ color: 0x8B7355, roughness: 0.8 }));
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.1;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            
+            const grid = new THREE.GridHelper(150, 40, 0x88aaff, 0x4466aa);
+            grid.position.y = 0;
+            scene.add(grid);
+            
+            // Controls
+            document.addEventListener('click', () => renderer.domElement.requestPointerLock());
+            document.addEventListener('pointerlockchange', () => {
+                pointerLock = document.pointerLockElement === renderer.domElement;
+                if (pointerLock) {
+                    document.addEventListener('mousemove', onMouseMove);
+                    loadingScreen.style.display = 'none';
+                } else {
+                    document.removeEventListener('mousemove', onMouseMove);
+                }
+            });
+            
+            window.addEventListener('keydown', (e) => {
+                switch(e.code) {
+                    case 'KeyW': keys.w = true; break;
+                    case 'KeyS': keys.s = true; break;
+                    case 'KeyA': keys.a = true; break;
+                    case 'KeyD': keys.d = true; break;
+                    case 'KeyE': interact(); break;
+                }
+            });
+            window.addEventListener('keyup', (e) => {
+                switch(e.code) {
+                    case 'KeyW': keys.w = false; break;
+                    case 'KeyS': keys.s = false; break;
+                    case 'KeyA': keys.a = false; break;
+                    case 'KeyD': keys.d = false; break;
+                }
+            });
+            
+            animate();
+        }
+        
+        function onMouseMove(e) {
+            if (!pointerLock) return;
+            yaw -= e.movementX * 0.002;
+            pitch -= e.movementY * 0.002;
+            pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, pitch));
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+        }
+        
+        function buildCity(zonesData) {
+            const colors = { industrial: 0x8B7D6B, residential: 0x7CB342, business: 0x42A5F5, downtown: 0xFFD700 };
+            
+            for (const [zoneName, zone] of Object.entries(zonesData)) {
+                for (const prop of zone.properties) {
+                    const geometry = new THREE.BoxGeometry(2.5, 3, 2.5);
+                    const material = new THREE.MeshStandardMaterial({ color: colors[zoneName], roughness: 0.3 });
+                    const building = new THREE.Mesh(geometry, material);
+                    building.position.set(prop.x, 1.5, prop.z);
+                    building.castShadow = true;
+                    building.userData = { type: 'property', data: prop, zone: zoneName };
+                    scene.add(building);
+                    buildings.push(building);
+                }
+                for (const biz of zone.businesses) {
+                    const geometry = new THREE.BoxGeometry(2.8, 2.5, 2.8);
+                    const material = new THREE.MeshStandardMaterial({ color: colors[zoneName], emissive: 0x331100 });
+                    const building = new THREE.Mesh(geometry, material);
+                    building.position.set(biz.x, 1.5, biz.z);
+                    building.castShadow = true;
+                    building.userData = { type: 'business', data: biz, zone: zoneName };
+                    scene.add(building);
+                    buildings.push(building);
+                }
+            }
+        }
+        
+        function createPlayerModel(username) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x44aa88 }));
+            body.position.y = 0.6;
+            body.castShadow = true;
+            group.add(body);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4), new THREE.MeshStandardMaterial({ color: 0xffccaa }));
+            head.position.y = 1.2;
+            head.castShadow = true;
+            group.add(head);
+            
+            // Name tag
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#000000aa';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.fillText(username, 10, 30);
+            const texture = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+            sprite.scale.set(1.5, 0.5, 1);
+            sprite.position.y = 1.8;
+            group.add(sprite);
+            
+            return group;
+        }
+        
+        function raycastInteraction() {
+            const raycaster = new THREE.Raycaster(camera.position, new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion));
+            const intersects = raycaster.intersectObjects(buildings);
+            if (intersects.length > 0 && intersects[0].distance < 4) return intersects[0].object.userData;
+            return null;
+        }
+        
+        function updatePrompt() {
+            const target = raycastInteraction();
+            currentLookTarget = target;
+            const promptDiv = document.getElementById('prompt');
+            const btnsDiv = document.getElementById('actionBtns');
+            
+            if (target) {
+                if (target.type === 'property') {
+                    const owned = currentPlayer?.properties?.includes(target.data.id);
+                    if (owned) {
+                        promptDiv.innerHTML = `🏠 ${target.data.name} (OWNED) | Rent: $${target.data.rent}/30s`;
+                        btnsDiv.innerHTML = '';
+                    } else {
+                        promptDiv.innerHTML = `💰 ${target.data.name} - $${target.data.price}`;
+                        btnsDiv.innerHTML = `<button onclick="window.buyProperty('${target.data.id}')">Buy Property</button>`;
+                    }
+                } else if (target.type === 'business') {
+                    const owned = currentPlayer?.businesses?.includes(target.data.id);
+                    if (owned) {
+                        promptDiv.innerHTML = `🏪 ${target.data.name} (OWNED) | Profit: $${target.data.profit}/30s`;
+                        btnsDiv.innerHTML = '';
+                    } else {
+                        promptDiv.innerHTML = `💼 ${target.data.name} - $${target.data.price}`;
+                        btnsDiv.innerHTML = `<button onclick="window.buyBusiness('${target.data.id}')">Start Business</button>`;
+                    }
+                }
+            } else {
+                promptDiv.innerHTML = "🔍 Look at a building to interact | Press E to work";
+                btnsDiv.innerHTML = '';
+            }
+        }
+        
+        function interact() {
+            if (currentLookTarget) {
+                if (currentLookTarget.type === 'property') window.buyProperty(currentLookTarget.data.id);
+                else if (currentLookTarget.type === 'business') window.buyBusiness(currentLookTarget.data.id);
+            } else {
+                socket.emit('work-job');
+            }
+        }
+        
+        function updateMovement() {
+            if (!pointerLock) return;
+            const speed = 5.0;
+            const delta = 1/60;
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            forward.y = 0; forward.normalize();
+            right.y = 0; right.normalize();
+            
+            let move = new THREE.Vector3();
+            if (keys.w) move.add(forward);
+            if (keys.s) move.sub(forward);
+            if (keys.d) move.add(right);
+            if (keys.a) move.sub(right);
+            move.multiplyScalar(speed * delta);
+            
+            const newPos = camera.position.clone().add(move);
+            if (Math.abs(newPos.x) < 60 && Math.abs(newPos.z) < 60) {
+                camera.position.copy(newPos);
+            }
+            
+            socket.emit('player-move', {
+                position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+                rotation: { yaw: yaw, pitch: pitch }
+            });
+        }
+        
+        // Socket Events
+        socket.on('game-init', (data) => {
+            currentPlayer = data.player;
+            zones = data.zones;
+            camera.position.set(data.player.position.x, data.player.position.y, data.player.position.z);
+            document.getElementById('money').textContent = data.player.money;
+            document.getElementById('playerName').textContent = data.player.username;
+            document.getElementById('jobName').textContent = data.player.job?.name || 'No Job';
+            
+            buildCity(zones);
+            
+            data.players.forEach(p => {
+                if (p.id !== socket.id) {
+                    const model = createPlayerModel(p.username);
+                    model.position.set(p.position.x, p.position.y, p.position.z);
+                    scene.add(model);
+                    players.set(p.id, { model, username: p.username });
+                }
+            });
+        });
+        
+        socket.on('player-joined', (data) => {
+            if (data.id !== socket.id) {
+                const model = createPlayerModel(data.username);
+                model.position.set(data.position.x, data.position.y, data.position.z);
+                scene.add(model);
+                players.set(data.id, { model, username: data.username });
+                addChatMessage('System', `${data.username} joined the city`, new Date().toLocaleTimeString());
+                showNotification(`${data.username} joined!`);
+            }
+        });
+        
+        socket.on('player-moved', (data) => {
+            const player = players.get(data.id);
+            if (player) {
+                player.model.position.set(data.position.x, data.position.y, data.position.z);
+            }
+        });
+        
+        socket.on('player-left', (id) => {
+            const player = players.get(id);
+            if (player) {
+                scene.remove(player.model);
+                players.delete(id);
+            }
+        });
+        
+        socket.on('work-result', (result) => {
+            if (result.success) {
+                document.getElementById('money').textContent = result.newMoney;
+                showNotification(`💼 Worked! +$${result.amount}`);
+            } else {
+                showNotification(result.message, true);
+            }
+        });
+        
+        socket.on('purchase-result', (result) => {
+            if (result.success) {
+                document.getElementById('money').textContent = result.newMoney;
+                showNotification(`🎉 Purchased ${result.item.name}!`);
+                if (currentPlayer) {
+                    if (result.type === 'property') currentPlayer.properties.push(result.item.id);
+                    else currentPlayer.businesses.push(result.item.id);
+                }
+            } else {
+                showNotification(result.message, true);
+            }
+        });
+        
+        socket.on('job-change-result', (result) => {
+            if (result.success) {
+                currentPlayer.job = result.job;
+                document.getElementById('jobName').textContent = result.job.name;
+                showNotification(`📋 Now working as ${result.job.name} ($${result.job.pay}/work)`);
+            } else {
+                showNotification(result.message, true);
+            }
+        });
+        
+        socket.on('player-update', (data) => {
+            if (currentPlayer && data.id === socket.id) {
+                if (data.money) { currentPlayer.money = data.money; document.getElementById('money').textContent = data.money; }
+                if (data.job) { currentPlayer.job = data.job; document.getElementById('jobName').textContent = data.job.name; }
+                if (data.properties) currentPlayer.properties = data.properties;
+                if (data.businesses) currentPlayer.businesses = data.businesses;
+            }
+        });
+        
+        socket.on('income-tick', (data) => {
+            document.getElementById('money').textContent = data.newMoney;
+            showNotification(`🏦 Passive income: +$${data.amount}`);
+        });
+        
+        socket.on('chat-message', (data) => {
+            addChatMessage(data.username, data.message, data.time);
+        });
+        
+        // Global functions for HTML
+        window.buyProperty = (id) => socket.emit('buy-property', id);
+        window.buyBusiness = (id) => socket.emit('buy-business', id);
+        window.changeJob = (id) => socket.emit('change-job', id);
+        
+        function showProperties() {
+            const modal = document.getElementById('modal');
+            const title = document.getElementById('modalTitle');
+            const content = document.getElementById('modalContent');
+            title.textContent = '🏢 Properties for Sale';
+            content.innerHTML = '';
+            for (const [zoneName, zone] of Object.entries(zones)) {
+                const zoneDiv = document.createElement('div');
+                zoneDiv.style.marginBottom = '20px';
+                zoneDiv.innerHTML = `<h3>${zone.name}</h3>`;
+                for (const prop of zone.properties) {
+                    const owned = currentPlayer?.properties?.includes(prop.id);
+                    zoneDiv.innerHTML += `
+                        <div class="item-card">
+                            <div><div class="item-name">${prop.name}</div><div class="item-price">💰 $${prop.price} | 📈 +$${prop.rent}/30s</div></div>
+                            ${!owned ? `<button class="buy-btn" onclick="window.buyProperty('${prop.id}');closeModal()">Buy</button>` : '<span class="owned-badge">OWNED</span>'}
+                        </div>
+                    `;
+                }
+                content.appendChild(zoneDiv);
+            }
+            modal.style.display = 'flex';
+        }
+        
+        function showBusinesses() {
+            const modal = document.getElementById('modal');
+            const title = document.getElementById('modalTitle');
+            const content = document.getElementById('modalContent');
+            title.textContent = '🏪 Businesses Available';
+            content.innerHTML = '';
+            for (const [zoneName, zone] of Object.entries(zones)) {
+                const zoneDiv = document.createElement('div');
+                zoneDiv.style.marginBottom = '20px';
+                zoneDiv.innerHTML = `<h3>${zone.name}</h3>`;
+                for (const biz of zone.businesses) {
+                    const owned = currentPlayer?.businesses?.includes(biz.id);
+                    zoneDiv.innerHTML += `
+                        <div class="item-card">
+                            <div><div class="item-name">${biz.name}</div><div class="item-price">💰 $${biz.price} | 📈 +$${biz.profit}/30s</div></div>
+                            ${!owned ? `<button class="buy-btn" onclick="window.buyBusiness('${biz.id}');closeModal()">Start</button>` : '<span class="owned-badge">OWNED</span>'}
+                        </div>
+                    `;
+                }
+                content.appendChild(zoneDiv);
+            }
+            modal.style.display = 'flex';
+        }
+        
+        function showJobs() {
+            const modal = document.getElementById('modal');
+            const title = document.getElementById('modalTitle');
+            const content = document.getElementById('modalContent');
+            title.textContent = '💼 Available Jobs';
+            content.innerHTML = '';
+            for (const [zoneName, zone] of Object.entries(zones)) {
+                const zoneDiv = document.createElement('div');
+                zoneDiv.style.marginBottom = '20px';
+                zoneDiv.innerHTML = `<h3>${zone.name}</h3>`;
+                for (const job of zone.jobs) {
+                    const isCurrent = currentPlayer?.job?.id === job.id;
+                    const affordable = currentPlayer?.money >= job.requirement;
+                    zoneDiv.innerHTML += `
+                        <div class="item-card">
+                            <div><div class="item-name">${job.name} ${isCurrent ? '✓' : ''}</div><div class="item-price">💰 $${job.pay}/work | Need $${job.requirement}</div></div>
+                            ${!isCurrent && affordable ? `<button class="buy-btn" onclick="window.changeJob('${job.id}');closeModal()">Switch</button>` : ''}
+                        </div>
+                    `;
+                }
+                content.appendChild(zoneDiv);
+            }
+            modal.style.display = 'flex';
+        }
+        
+        function showPlayers() {
+            const modal = document.getElementById('modal');
+            const title = document.getElementById('modalTitle');
+            const content = document.getElementById('modalContent');
+            title.textContent = '👥 Online Players';
+            content.innerHTML = '';
+            content.innerHTML += `<div class="item-card"><div><div class="item-name">${currentPlayer?.username} (You)</div></div><span class="owned-badge">YOU</span></div>`;
+            for (const [id, p] of players) {
+                content.innerHTML += `<div class="item-card"><div><div class="item-name">${p.username}</div><div>Exploring the city</div></div></div>`;
+            }
+            if (players.size === 0) content.innerHTML += '<div style="text-align:center">No other players online</div>';
+            modal.style.display = 'flex';
+        }
+        
+        window.showProperties = showProperties;
+        window.showBusinesses = showBusinesses;
+        window.showJobs = showJobs;
+        window.showPlayers = showPlayers;
+        window.closeModal = () => document.getElementById('modal').style.display = 'none';
+        
+        function animate() {
+            updateMovement();
+            updatePrompt();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        
+        init();
+    </script>
+</body>
+</html>
